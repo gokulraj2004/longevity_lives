@@ -1,0 +1,9 @@
+streamlit
+pandas
+plotly
+numpy
+scipy
+base64
+folium
+streamlit_folium
+branca
