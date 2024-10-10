@@ -367,6 +367,11 @@ def main():
         # Calculate statistics
         stats_df = filtered_df.groupby('state')['life_expectancy'].agg(['mean', 'median']).reset_index()
         
+        # Round mean and median to 2 decimal places
+        stats_df['mean'] = stats_df['mean'].round(2)
+        stats_df['median'] = stats_df['median'].round(2)
+
+        
         # Find counties closest to each statistic
         for stat in ['mean', 'median']:
             stats_df[f'{stat}_county'] = stats_df.apply(lambda row: 
@@ -525,10 +530,23 @@ def main():
         # Correlation and Regression Analysis
         st.header("Correlation and Regression Analysis")
         
-        factors = ['access_to_exercise_opportunities', 'adult_obesity', 'air_pollution_particulate_matter',
-                'children_in_poverty', 'drinking_water_violations', 'excessive_drinking',
-                'frequent_mental_distress', 'high_school_graduation', 'income_inequality',
-                'median_household_income', 'poverty', 'ratio_of_pop_to_pcp', 'unemployment_rate', 'uninsured_adults']
+        factors = [
+            'premature_mortality',
+            'median_household_income',
+            'pct_65_and_older',
+            'driving_alone_to_work',
+            'injury_deaths',
+            'adult_obesity',
+            'frequent_mental_distress',
+            'single_parent_households',
+            'air_pollution_particulate_matter',
+            'median_age',
+            'adult_smoking',
+            'mammography_screening',
+            'housing_cost_challenges',
+            'social_associations'
+        ]
+
         
         selected_factors = st.multiselect("Select factors for correlation analysis", factors, default=factors)
         
@@ -583,10 +601,8 @@ def main():
         filtered_df['area_type'] = np.where(filtered_df['population'] > population_threshold, 'Urban', 'Rural')
 
         # List of factors to analyze
-        factors = ['income_inequality', 'high_school_graduation', 'adult_obesity', 'access_to_exercise_opportunities', 
-                'air_pollution_particulate_matter', 'children_in_poverty', 'drinking_water_violations', 
-                'excessive_drinking', 'frequent_mental_distress', 'median_household_income', 'poverty', 
-                'ratio_of_pop_to_pcp', 'unemployment_rate', 'uninsured_adults', 'life_expectancy']
+        factors = ['premature_mortality','median_household_income','pct_65_and_older','driving_alone_to_work','injury_deaths','adult_obesity',  'frequent_mental_distress',    'single_parent_households', 
+                   'air_pollution_particulate_matter',    'median_age',    'adult_smoking',    'mammography_screening',    'housing_cost_challenges',    'social_associations']
 
         # Feature Map
         st.header("Feature Distribution Map")
@@ -688,6 +704,8 @@ def main():
     elif page == "Life Expectancy Predictor": 
         predict_life_expectancy()
         
+
+
 if __name__ == "__main__":
     main()
         
