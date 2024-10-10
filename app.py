@@ -9,13 +9,13 @@ import folium
 from streamlit_folium import folium_static
 from branca.colormap import LinearColormap
 import os
-
+import pickle
 
 # Set page config
 st.set_page_config(page_title="U.S. Life Expectancy Explorer", layout="wide")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-data_path = os.path.join(BASE_DIR, "data", "chr_census_featured_engineered.csv")
+data_path = os.path.join(BASE_DIR, "data", "chr_census_feature_engineered_final.csv")
 video_path = os.path.join(BASE_DIR, "assets", "bluezonevideo.mp4")
 
 
@@ -25,7 +25,167 @@ def load_data():
     df = pd.read_csv(data_path)
     return df
 
+
+
+selected_features = [
+    'premature_mortality', 'median_household_income', 'pct_65_and_older', 
+    'driving_alone_to_work', 'injury_deaths', 'adult_obesity', 'frequent_mental_distress', 
+    'single_parent_households', 'air_pollution_particulate_matter', 'median_age', 
+    'adult_smoking', 'mammography_screening', 'housing_cost_challenges', 
+    'social_associations', 'excessive_drinking', 'insufficient_sleep', 'pct_under_18', 
+    'high_school_graduation', 'ratio_of_pop_to_dentists', 'uninsured_adults', 
+    'preventable_hospital_stays', 'homeownership', 'poverty', 
+    'children_in_poverty', 'unemployment_rate'
+]
+
+
+
+# Custom CSS to enhance the UI
+custom_css = """
+<style>
+    .stApp {
+        background-color: #000000;
+    }
+    .main > div {
+        padding-top: 2rem;
+    }
+    .stSlider > div > div > div {
+        background-color: #4e79a700;
+    }
+    .stSlider > div > div > div > div {
+        color: white;
+    }
+    .stSlider > div > div > div > div > div {
+        background-color: transparent !important;
+    }
+    .stPlotlyChart {
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px 0 rgba(0,0,0,0.16);
+    }
+    .css-1d391kg {
+        background-color: #ffffff;
+        border-radius: 5px;
+        padding: 1rem;
+        box-shadow: 0 2px 5px 0 rgba(0,0,0,0.16);
+    }
+</style>
+"""
+
+
+@st.cache_resource
+def load_model_and_scaler():
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(BASE_DIR, "models", "xgboost_best_selected_model.pkl")
+        scaler_path = os.path.join(BASE_DIR, "models", "scaler.pkl")
+        
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+            st.warning("Model or scaler file not found.")
+            return None, None
+        
+        with open(model_path, 'rb') as f:
+            model = pickle.load(f)
+        with open(scaler_path, 'rb') as f:
+            scaler = pickle.load(f)
+        
+        return model, scaler
+    except Exception as e:
+        st.error(f"Error loading model or scaler: {str(e)}")
+        return None, None
+
+# Load data and model at app startup
 df = load_data()
+model, scaler = load_model_and_scaler()
+
+
+def predict_life_expectancy():
+    global df, model, scaler  # Use global variables
+
+    st.title("🧬 Life Expectancy Predictor")
+    st.write("Explore how community health indicators affect life expectancy. Adjust the sliders to see real-time changes in the prediction.")
+    
+    # Get feature ranges from the dataset
+    feature_ranges = get_feature_ranges()
+    input_dict = {}
+    
+    st.sidebar.header("Community Health Indicators")
+    for feature, (min_val, max_val) in feature_ranges.items():
+        # Calculate a sensible default value (e.g., median)
+        default_val = df[feature].median()
+        input_dict[feature] = st.sidebar.slider(
+            feature.replace('_', ' ').title(),
+            min_value=float(min_val),
+            max_value=float(max_val),
+            value=float(default_val),
+            key=feature
+        )
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("Community Health Indicators Visualization")
+        polar_area_chart = get_polar_area_chart(input_dict)
+        st.plotly_chart(polar_area_chart, use_container_width=True)
+    
+    with col2:
+        st.subheader("Life Expectancy Prediction")
+        if st.button("Predict Life Expectancy", key="predict_button", help="Click to calculate the predicted life expectancy based on current inputs"):
+            input_array = np.array([input_dict[feature] for feature in selected_features]).reshape(1, -1)
+            scaled_input = scaler.transform(input_array)
+            prediction = model.predict(scaled_input)[0]
+            st.markdown(f"<h1 style='text-align: center; color: #4e79a7;'>{prediction:.2f} years</h1>", unsafe_allow_html=True)
+            st.info("This prediction is based on community health indicators and should not be used as a substitute for professional medical advice.")
+        
+        st.markdown("### How it works")
+        st.write("1. Adjust the sliders in the sidebar to input community health indicators.")
+        st.write("2. The polar area chart updates in real-time to visualize your inputs.")
+        st.write("3. Click 'Predict Life Expectancy' to see the estimated life expectancy based on your inputs.")
+        st.write("4. Experiment with different combinations to see how various factors affect life expectancy.")
+
+def get_polar_area_chart(input_data):
+    feature_ranges = get_feature_ranges()
+    normalized_data = {}
+    for feature, value in input_data.items():
+        min_val, max_val = feature_ranges[feature]
+        normalized_data[feature] = (value - min_val) / (max_val - min_val)
+
+    categories = list(normalized_data.keys())
+    values = list(normalized_data.values())
+    
+    fig = go.Figure(go.Barpolar(
+        r=values,
+        theta=categories,
+        opacity=0.8,
+        marker=dict(
+            color=values,
+            colorscale='Magma',
+            showscale=True,
+            colorbar=dict(title='Normalized Value')
+        )
+    ))
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 1]),
+            angularaxis=dict(direction="clockwise")
+        ),
+        showlegend=False,
+        height=500,
+        margin=dict(l=80, r=80, t=20, b=20),
+        title="Community Health Indicators"
+    )
+    return fig
+
+
+def get_feature_ranges():
+    global df  # Use global df
+    feature_ranges = {}
+    for feature in selected_features:
+        min_val = df[feature].min()
+        max_val = df[feature].max()
+        feature_ranges[feature] = (min_val, max_val)
+    return feature_ranges
 
 
 # Function to encode video file to base64
@@ -33,6 +193,52 @@ def get_base64_video(video_file):
     with open(video_file, "rb") as f:
         data = f.read()
     return base64.b64encode(data).decode()
+
+def toggle_video_background(video_file):
+    video_base64 = get_base64_video(video_file)
+    st.session_state.show_video = not st.session_state.get('show_video', False)
+    
+    if st.session_state.show_video:
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background: url(data:video/mp4;base64,{video_base64});
+                background-size: cover;
+            }}
+            #myVideo {{
+                position: fixed;
+                right: 0;
+                bottom: 0;
+                min-width: 100%;
+                min-height: 100%;
+                width: auto;
+                height: auto;
+                z-index: -1;
+                object-fit: cover;
+            }}
+            </style>
+            <video autoplay muted loop id="myVideo">
+                <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
+            </video>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            """
+            <style>
+            .stApp {
+                background: none;
+            }
+            #myVideo {
+                display: none;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
 
 # Function to set video as background
 def set_video_background(video_file):
@@ -64,11 +270,19 @@ def set_video_background(video_file):
     )
 
 
+
+
 # Main function to run the app
 def main():
     st.sidebar.title("Navigation")
+    
+    # Add toggle button to sidebar
+    if st.sidebar.button("Toggle Background Video"):
+        toggle_video_background(video_path)
+    
     # Sidebar for page selection
-    page = st.sidebar.radio("Select a page", ["Overview", "Life Expectancy Insights", "Disparities and Impact"])
+    page = st.sidebar.radio("Select a page", ["Overview", "Life Expectancy Insights", "Disparities and Impact", "Life Expectancy Predictor"])
+    
     st.markdown(
     """
     <style>
@@ -170,74 +384,143 @@ def main():
         col1, col2 = st.columns([3, 1])
 
         with col1:
-            # Create a base map
-            m = folium.Map(location=[37.0902, -95.7129], zoom_start=4, tiles="cartodbdark_matter")
-            colormap = LinearColormap(colors=['red', 'yellow', 'green'], vmin=stats_df['mean'].min(), vmax=stats_df['mean'].max())
+            # Ensure we have valid data for all points
+            mean_lons = []
+            mean_lats = []
+            mean_texts = []
+            mean_colors = []
+            
+            median_lons = []
+            median_lats = []
+            median_texts = []
+            median_colors = []
 
-            # Add markers for mean and median
             for _, row in stats_df.iterrows():
-                # Mean marker (circle)
-                folium.CircleMarker(
-                    location=[filtered_df[filtered_df['geo_name'] == row['mean_county']]['latitude'].values[0],
-                            filtered_df[filtered_df['geo_name'] == row['mean_county']]['longitude'].values[0]],
-                    radius=6,
-                    popup=f"State: {row['state']}<br>Mean: {row['mean']:.2f}<br>County: {row['mean_county']}",
-                    color='blue',
-                    fill=True,
-                    fillColor='blue',
-                    fillOpacity=0.7
-                ).add_to(m)
+                # Mean data
+                mean_county_data = filtered_df[filtered_df['geo_name'] == row['mean_county']]
+                if not mean_county_data.empty:
+                    mean_lons.append(mean_county_data['longitude'].values[0])
+                    mean_lats.append(mean_county_data['latitude'].values[0])
+                    mean_texts.append(f"State: {row['state']}<br>Mean: {row['mean']:.2f}<br>County: {row['mean_county']}")
+                    mean_colors.append(row['mean'])
 
-                # Median marker (diamond)
-                folium.RegularPolygonMarker(
-                    location=[filtered_df[filtered_df['geo_name'] == row['median_county']]['latitude'].values[0],
-                            filtered_df[filtered_df['geo_name'] == row['median_county']]['longitude'].values[0]],
-                    number_of_sides=4,
-                    radius=5,
-                    rotation=45,
-                    popup=f"State: {row['state']}<br>Median: {row['median']:.2f}<br>County: {row['median_county']}",
-                    color='red',
-                    fill=True,
-                    fillColor='red',
-                    fillOpacity=0.7
-                ).add_to(m)
+                # Median data
+                median_county_data = filtered_df[filtered_df['geo_name'] == row['median_county']]
+                if not median_county_data.empty:
+                    median_lons.append(median_county_data['longitude'].values[0])
+                    median_lats.append(median_county_data['latitude'].values[0])
+                    median_texts.append(f"State: {row['state']}<br>Median: {row['median']:.2f}<br>County: {row['median_county']}")
+                    median_colors.append(row['median'])
+
+            # Create traces only if we have data
+            data = []
+            
+            if mean_lons:
+                mean_data = go.Scattergeo(
+                    lon=mean_lons,
+                    lat=mean_lats,
+                    text=mean_texts,
+                    mode='markers',
+                    name='Mean Life Expectancy',
+                    marker=dict(
+                        size=10,
+                        color=mean_colors,
+                        colorscale='RdYlGn',
+                        colorbar=dict(
+                            title='Life Expectancy (years)',
+                            x=1.1  # Adjust position of colorbar
+                        ),
+                        cmin=min(stats_df['mean'].min(), stats_df['median'].min()),
+                        cmax=max(stats_df['mean'].max(), stats_df['median'].max()),
+                        symbol='circle'
+                    ),
+                    hoverinfo='text'
+                )
+                data.append(mean_data)
+
+            if median_lons:
+                median_data = go.Scattergeo(
+                    lon=median_lons,
+                    lat=median_lats,
+                    text=median_texts,
+                    mode='markers',
+                    name='Median Life Expectancy',
+                    marker=dict(
+                        size=10,
+                        color=median_colors,
+                        colorscale='RdYlGn',
+                        cmin=min(stats_df['mean'].min(), stats_df['median'].min()),
+                        cmax=max(stats_df['mean'].max(), stats_df['median'].max()),
+                        symbol='diamond'
+                    ),
+                    hoverinfo='text'
+                )
+                data.append(median_data)
+
+            # Create the layout
+            layout = go.Layout(
+                geo=dict(
+                    scope='usa',
+                    projection_type='albers usa',
+                    showland=True,
+                    landcolor='rgb(20, 20, 20)',
+                    countrycolor='rgb(40, 40, 40)',
+                    showlakes=True,
+                    lakecolor='rgb(20, 20, 20)',
+                    subunitcolor='rgb(40, 40, 40)'
+                ),
+                paper_bgcolor='rgb(10, 10, 10)',
+                plot_bgcolor='rgb(10, 10, 10)',
+                margin=dict(l=0, r=0, t=0, b=0),
+                showlegend=True,
+                legend=dict(
+                    x=0,
+                    y=1,
+                    bgcolor='rgba(0,0,0,0.5)',
+                    font=dict(color='white')
+                )
+            )
+
+            # Create the figure
+            fig = go.Figure(data=data, layout=layout)
+            
+            # Update layout for dark theme compatibility
+            fig.update_layout(
+                height=600,
+                font=dict(color='white'),
+            )
 
             # Display the map
-            folium_static(m)
+            st.plotly_chart(fig, use_container_width=True)
 
         with col2:
             st.subheader("Legend")
             
-            # Mean marker legend
-            st.markdown(
-                '<div style="display: flex; align-items: center; margin-bottom: 10px;">'
-                '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: blue; margin-right: 10px;"></div>'
-                '<span>Mean Life Expectancy</span>'
-                '</div>',
-                unsafe_allow_html=True
-            )
+            # Explanatory text
+            st.markdown("""
+            The map shows two key statistics for each state:
+            - **Circles**: Mean Life Expectancy
+            - **Diamonds**: Median Life Expectancy
             
-            # Median marker legend
-            st.markdown(
-                '<div style="display: flex; align-items: center; margin-bottom: 10px;">'
-                '<div style="width: 20px; height: 20px; transform: rotate(45deg); background-color: red; margin-right: 10px;"></div>'
-                '<span>Median Life Expectancy</span>'
-                '</div>',
-                unsafe_allow_html=True
-            )
+            Colors indicate life expectancy values:
+            - Red: Lower life expectancy
+            - Yellow: Medium life expectancy
+            - Green: Higher life expectancy
             
-            # Colormap legend
-            st.write("Life Expectancy (years)")
-            colormap_html = f'''
-            <div style="display: flex; flex-direction: column; align-items: stretch;">
-                <div style="height: 20px; background: linear-gradient(to right, red, yellow, green);"></div>
-                <div style="display: flex; justify-content: space-between;">
-                    <span>{stats_df['mean'].min():.1f}</span>
-                    <span>{stats_df['mean'].max():.1f}</span>
-                </div>
-            </div>
-            '''
-            st.markdown(colormap_html, unsafe_allow_html=True)
+            Hover over points to see detailed information.
+            """)
+            
+            # Display summary statistics
+            st.write("### Summary Statistics")
+            st.write(f"Lowest Life Expectancy: {min(stats_df['mean'].min(), stats_df['median'].min()):.1f} years")
+            st.write(f"Highest Life Expectancy: {max(stats_df['mean'].max(), stats_df['median'].max()):.1f} years")
+            st.write(f"Average Life Expectancy: {((stats_df['mean'].mean() + stats_df['median'].mean()) / 2):.1f} years")
+            
+            # Add filter information
+            if selected_state != "All":
+                st.write(f"### Current Filter")
+                st.write(f"State: {selected_state}")
+            st.write(f"Year: {selected_year}")
 
         # Correlation and Regression Analysis
         st.header("Correlation and Regression Analysis")
@@ -401,6 +684,10 @@ def main():
         - Addressing these disparities requires a multi-faceted approach, considering local contexts and needs.
         - Policy interventions should be tailored to the specific challenges faced by each community, as the impact of various factors can differ between regions.
         """)
+
+    elif page == "Life Expectancy Predictor": 
+        predict_life_expectancy()
+        
 
 
 if __name__ == "__main__":
