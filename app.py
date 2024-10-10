@@ -15,7 +15,8 @@ import pickle
 st.set_page_config(page_title="U.S. Life Expectancy Explorer", layout="wide")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-data_path = os.path.join(BASE_DIR, "data", "chr_census_feature_engineered_final.csv")
+data_path = os.path.join(BASE_DIR, "data", "chr_census_feature_engineered.csv")
+
 video_path = os.path.join(BASE_DIR, "assets", "bluezonevideo.mp4")
 
 
