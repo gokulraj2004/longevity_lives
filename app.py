@@ -22,9 +22,16 @@ video_path = os.path.join(BASE_DIR, "assets", "bluezonevideo.mp4")
 # Load the data
 @st.cache_data
 def load_data():
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(BASE_DIR, "data", "chr_census_feature_engineered_final.csv")
+    if not os.path.exists(data_path):
+        st.error(f"Data file not found: {data_path}")
+        return None
     df = pd.read_csv(data_path)
+    if df.empty:
+        st.error("The data file is empty.")
+        return None
     return df
-
 
 
 selected_features = [
