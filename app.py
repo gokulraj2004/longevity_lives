@@ -159,7 +159,7 @@ def get_polar_area_chart(input_data):
         opacity=0.8,
         marker=dict(
             color=values,
-            colorscale='Magma',
+            colorscale='Viridis',
             showscale=True,
             colorbar=dict(title='Normalized Value')
         )
@@ -171,7 +171,7 @@ def get_polar_area_chart(input_data):
             angularaxis=dict(direction="clockwise")
         ),
         showlegend=False,
-        height=500,
+        height=600,
         margin=dict(l=80, r=80, t=20, b=20),
         title="Community Health Indicators"
     )
@@ -193,52 +193,6 @@ def get_base64_video(video_file):
     with open(video_file, "rb") as f:
         data = f.read()
     return base64.b64encode(data).decode()
-
-def toggle_video_background(video_file):
-    video_base64 = get_base64_video(video_file)
-    st.session_state.show_video = not st.session_state.get('show_video', False)
-    
-    if st.session_state.show_video:
-        st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background: url(data:video/mp4;base64,{video_base64});
-                background-size: cover;
-            }}
-            #myVideo {{
-                position: fixed;
-                right: 0;
-                bottom: 0;
-                min-width: 100%;
-                min-height: 100%;
-                width: auto;
-                height: auto;
-                z-index: -1;
-                object-fit: cover;
-            }}
-            </style>
-            <video autoplay muted loop id="myVideo">
-                <source src="data:video/mp4;base64,{video_base64}" type="video/mp4">
-            </video>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            """
-            <style>
-            .stApp {
-                background: none;
-            }
-            #myVideo {
-                display: none;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-
 
 # Function to set video as background
 def set_video_background(video_file):
@@ -275,13 +229,20 @@ def set_video_background(video_file):
 # Main function to run the app
 def main():
     st.sidebar.title("Navigation")
-    
-    # Add toggle button to sidebar
-    if st.sidebar.button("Toggle Background Video"):
-        toggle_video_background(video_path)
-    
     # Sidebar for page selection
     page = st.sidebar.radio("Select a page", ["Overview", "Life Expectancy Insights", "Disparities and Impact", "Life Expectancy Predictor"])
+    
+    if page == "Life Expectancy Predictor":
+        pass
+    elif page == "Overview":
+        # Your existing Overview code
+        pass
+    elif page == "Life Expectancy Insights":
+        # Your existing Insights code
+        pass
+    elif page == "Disparities and Impact":
+        # Your existing Disparities code
+        pass
     
     st.markdown(
     """
@@ -367,10 +328,9 @@ def main():
         # Calculate statistics
         stats_df = filtered_df.groupby('state')['life_expectancy'].agg(['mean', 'median']).reset_index()
         
-        # Round mean and median to 2 decimal places
+        # Add these two lines to round to 2 decimal places
         stats_df['mean'] = stats_df['mean'].round(2)
         stats_df['median'] = stats_df['median'].round(2)
-
         
         # Find counties closest to each statistic
         for stat in ['mean', 'median']:
@@ -601,8 +561,23 @@ def main():
         filtered_df['area_type'] = np.where(filtered_df['population'] > population_threshold, 'Urban', 'Rural')
 
         # List of factors to analyze
-        factors = ['premature_mortality','median_household_income','pct_65_and_older','driving_alone_to_work','injury_deaths','adult_obesity',  'frequent_mental_distress',    'single_parent_households', 
-                   'air_pollution_particulate_matter',    'median_age',    'adult_smoking',    'mammography_screening',    'housing_cost_challenges',    'social_associations']
+        factors = [
+            'premature_mortality',
+            'median_household_income',
+            'pct_65_and_older',
+            'driving_alone_to_work',
+            'injury_deaths',
+            'adult_obesity',
+            'frequent_mental_distress',
+            'single_parent_households',
+            'air_pollution_particulate_matter',
+            'median_age',
+            'adult_smoking',
+            'mammography_screening',
+            'housing_cost_challenges',
+            'social_associations'
+        ]
+
 
         # Feature Map
         st.header("Feature Distribution Map")
