@@ -688,8 +688,6 @@ def main():
     elif page == "Life Expectancy Predictor": 
         predict_life_expectancy()
         
-
-
 if __name__ == "__main__":
     main()
         
